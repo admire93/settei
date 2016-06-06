@@ -1,6 +1,6 @@
 """
-settei
-~~~~~~
+settei.app
+~~~~~~~~~~
 
 :copyright: (c) 2016 Spoqa, Inc.
 :license: Apache License 2.0, see LICENSE for more details.
@@ -115,7 +115,7 @@ class config_property:
     @property
     def docstring(self):
         """(:class:`str`) The propertly indented :attr:`__doc__` string."""
-        return textwrap.dedent(self.__doc__).rstrip()
+        return textwrap.dedent(self.__doc__ or '').rstrip()
 
     def __repr__(self):
         return '{0.__module__}.{0.__qualname__}({1!r})'.format(

@@ -1,3 +1,8 @@
 
 .. automodule:: settei
-   :members:
+
+   .. toctree::
+      :maxdepth: 2
+
+      settei/app
+      settei/cli

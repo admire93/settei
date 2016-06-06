@@ -1,10 +1,25 @@
+import functools
 import pathlib
 import typing  # noqa
 import warnings
 
-from pytest import mark, raises
+from pytest import fixture, mark, raises
 
-from settei import config_property, Configuration, ConfigWarning
+from settei.app import config_property, Configuration, ConfigWarning
+from settei.cli import Cli
+
+
+@fixture
+def fx_mock_input():
+    def fake_input(m=None, answer='y', config_value=None):
+        if m is not None:
+            if m.startswith('Use default?'):
+                return answer
+            elif m.startswith('Custom configuration'):
+                return config_value
+        return None
+
+    return fake_input
 
 
 class TestConfig(dict):
@@ -123,3 +138,29 @@ def test_app_from_path(tmpdir):
     ''')
     cfg = TestAppConfig.from_path(pathlib.Path(path.strpath))
     assert cfg.database_url == 'sqlite:///b.db'
+
+
+def test_cli_config_properties():
+    cli = Cli(TestAppConfig)
+    properties = list(cli.config_properties)
+    assert len(properties) == 1
+    assert properties[0] == ('database_url', TestAppConfig.database_url)
+
+
+def test_cli_input_configs_default_y(monkeypatch, fx_mock_input):
+    monkeypatch.setitem(__builtins__, 'input', fx_mock_input)
+    cli = Cli(TestAppConfig)
+    config = cli.input_configs()
+    assert config == {'database': {'url': 'sqlite:///test_app.db'}}
+
+
+def test_cli_input_configs_default_n(monkeypatch, fx_mock_input):
+    pgsql_url = 'postgresql://local'
+    monkeypatch.setitem(
+        __builtins__,
+        'input',
+        functools.partial(fx_mock_input, answer='N', config_value=pgsql_url)
+    )
+    cli = Cli(TestAppConfig)
+    config = cli.input_configs()
+    assert config == {'database': {'url': pgsql_url}}

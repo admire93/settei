@@ -1,0 +1,3 @@
+
+.. automodule:: settei.cli
+   :members:
