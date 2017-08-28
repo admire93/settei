@@ -446,3 +446,14 @@ class Configuration(collections.abc.Mapping):
         return '{0.__module__}.{0.__qualname__}({1!r})'.format(
             type(self), self.config
         )
+
+
+class cached_object_property(config_object_property):
+
+    def __get__(self, obj, cls: typing.Optional[type]=None):
+        cache_key = '__cache_{!s}__'.format(self.key)
+        instance = getattr(obj, cache_key, None)
+        if not instance:
+            instance = super().__get__(obj, cls)
+            setattr(obj, cache_key, instance)
+        return instance
