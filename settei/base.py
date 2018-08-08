@@ -71,6 +71,10 @@ class config_property:
                             this option is only available when ``default``
                             value is provided
     :type default_warning: :class:`bool`
+    :type cached: :class:`bool`
+    :param cached: keyword only argument.
+                   get config value which is cached on its instance so that
+                   config value won't be created again.
 
     .. versionchanged:: 0.4.0
 
@@ -86,9 +90,11 @@ class config_property:
     """
 
     @typechecked
-    def __init__(self, key: str, cls, docstring: str=None, **kwargs) -> None:
+    def __init__(self, key: str, cls, docstring: str=None, cached: bool=False,
+                 **kwargs) -> None:
         self.key = key
         self.cls = cls
+        self.cached = cached
         self.__doc__ = docstring
         if 'default_func' in kwargs:
             if 'default' in kwargs:
@@ -113,12 +119,25 @@ class config_property:
             self.default_func = None
             self.default_warning = False
 
-    def __get__(self, obj, cls: typing.Optional[type]=None):
+    def raw_value(self, obj):
         if obj is None:
             return self
         default, value = self.get_raw_value(obj)
         if not default:
             self.typecheck(value)
+        return value
+
+    def __get__(self, obj, cls: typing.Optional[type]=None):
+        if self.cached:
+            cache_key = '  cache_{!s}'.format(self.key)
+            instance = getattr(obj, cache_key, None)
+            if instance is None:
+                value = self.raw_value(obj)
+                setattr(obj, cache_key, value)
+            else:
+                value = instance
+        else:
+            value = self.raw_value(obj)
         return value
 
     def get_raw_value(self, obj) -> typing.Tuple[bool, object]:

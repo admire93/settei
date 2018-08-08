@@ -42,6 +42,7 @@ class TestConfig(dict):
     depth2_warn = config_property('section.key', str,
                                   default=None, default_warning=True)
     union = config_property('union', typing.Union[int, str])
+    cached = config_property('cached', bool)
 
 
 class TestAppConfig(Configuration):
@@ -291,3 +292,9 @@ def test_app_from_path(tmpdir):
     ''')
     cfg = TestAppConfig.from_path(pathlib.Path(path.strpath))
     assert cfg.database_url == 'sqlite:///b.db'
+
+
+def test_config_property_cached():
+    tc = TestConfig({'cached': True})
+    cached_id = id(tc.cached)
+    assert cached_id == id(tc.cached)
