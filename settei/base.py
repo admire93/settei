@@ -8,6 +8,7 @@ import collections
 import collections.abc
 import enum
 import functools
+import itertools
 import os
 import pathlib
 import re
@@ -114,6 +115,8 @@ class config_property:
 
     """
 
+    delimiter = '__'
+
     @typechecked
     def __init__(self, key: str, cls, docstring: str = None,
                  *,
@@ -169,23 +172,32 @@ class config_property:
                 return False, None
         return True, value
 
+    def _make_env_name(self, k: str) -> str:
+        return k.replace('.', self.delimiter).upper()
+
+    def _value_from_env(self, obj):
+        env_val = os.environ.get(
+            self.env_name or self._make_env_name(self.key)
+        )
+        if env_val is None:
+            return env_val
+        if self.parse_env:
+            try:
+                env_val = self.parse_env(env_val)
+            except Exception as e:
+                raise ConfigValueError(
+                    'having a trouble for parsing an environment var.'
+                ) from e
+        return env_val
+
     def get_raw_value(self, obj) -> typing.Tuple[bool, object]:
         raw_value = None
         found, value = self._value_from_dict(obj)
         if found:
             raw_value = False, value
         if raw_value is None and self.lookup_env:
-            env_val = os.environ.get(
-                self.env_name or self.key.replace('.', '_').upper()
-            )
+            env_val = self._value_from_env(obj)
             if env_val is not None:
-                if self.parse_env:
-                    try:
-                        env_val = self.parse_env(env_val)
-                    except Exception as e:
-                        raise ConfigValueError(
-                            'having a trouble for parsing an environment var.'
-                        ) from e
                 raw_value = False, env_val
         if raw_value is None and self.default_set:
             default = self.default_func(obj)
@@ -260,6 +272,9 @@ class config_property:
         return '{0.__module__}.{0.__qualname__}({1!r})'.format(
             type(self), self.key
         )
+
+
+ParseFunctionType = typing.Callable[[typing.Mapping, ], typing.Mapping]
 
 
 class config_object_property(config_property):
@@ -383,11 +398,48 @@ class config_object_property(config_property):
     @typechecked
     def __init__(self, key: str, cls, docstring: str = None,
                  recurse: bool = False, *, cached: bool = False,
+                 lookup_env: bool = True,
+                 env_names: typing.Optional[typing.Mapping[str, str]] = None,
+                 parse: ParseFunctionType = None,
                  **kwargs) -> None:
         super().__init__(key=key, cls=cls, docstring=docstring,
-                         lookup_env=False, **kwargs)
+                         lookup_env=lookup_env, **kwargs)
         self.recurse = recurse
         self.cached = cached
+
+    def _transform_env_to_dict(self, env):
+        rs = {}
+        split_env_names = [
+            x.split(self.delimiter) for x in env.keys()
+        ]
+        for zip_keys, in itertools.zip_longest(split_env_names):
+            z = rs
+            for i, key in enumerate(zip_keys):
+                k = key.lower()
+                env_name = self.delimiter.join(zip_keys[:i + 1])
+                if env_name in env:
+                    input_ = env[env_name]
+                else:
+                    input_ = {}
+                z.setdefault(k, input_)
+                z = z[k]
+        return rs
+
+    def _value_from_env(self, obj):
+        group_key = self._make_env_name(self.key) + self.delimiter
+        environ = {
+            k: v
+            for k, v in os.environ.items()
+            if k.startswith(group_key)
+        }
+        if environ:
+            e = self._transform_env_to_dict(environ)
+            r = e
+            for k in self.key.split('.'):
+                r = r[k]
+            return r
+        else:
+            return None
 
     def __get__(self, obj, cls: typing.Optional[type] = None):
         if obj is None:
